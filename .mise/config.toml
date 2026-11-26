@@ -1,2 +1,10 @@
 # This TOML file contains project-specific settings.
 # Add project-specific information here.
+
+[tasks.test]
+description = "Run the decision-server tests"
+run = "python -m pytest"
+
+[tasks.serve]
+description = "Serve decisions with the config file in the working directory"
+run = "python -m mlx_d1 serve"

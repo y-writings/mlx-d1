@@ -3,3 +3,11 @@
 .gh
 .opencode/plugins/entire.ts
 # end driftline
+
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.venv/
+*.egg-info/
+dist/
+build/
