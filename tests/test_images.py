@@ -1,10 +1,12 @@
+import struct
+import zlib
 from pathlib import Path
 
 import pytest
 from PIL import Image
 
 from mlx_d1.errors import ImageError
-from mlx_d1.images import load_image_inputs
+from mlx_d1.images import load_image_inputs, open_image
 from tests.conftest import DATA_URL, PNG_BASE64, PNG_BYTES
 
 
@@ -72,6 +74,31 @@ def test_directory_and_nul_are_rejected(tmp_path: Path):
         _load([str(tmp_path)], [tmp_path])
     with pytest.raises(ImageError, match="NUL"):
         _load(["bad\x00.png"], [tmp_path])
+
+
+def _png_header(width: int, height: int) -> bytes:
+    """A PNG whose header claims ``width`` by ``height`` and has no pixel data."""
+
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        checksum = zlib.crc32(tag + data) & 0xFFFFFFFF
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", checksum)
+
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IEND", b"")
+
+
+def test_pixel_cap_rejects_before_the_pillow_error_threshold():
+    # Pillow warns, and still decodes, until the image is twice MAX_IMAGE_PIXELS.
+    capped = _png_header(width=20, height=8)  # 160 pixels, between 100 and 200
+    with pytest.warns(Image.DecompressionBombWarning):
+        with pytest.raises(ImageError, match="max_image_pixels"):
+            open_image(capped, label="image 1", max_bytes=1024 * 1024, max_pixels=100)
+
+
+def test_pixel_cap_still_rejects_a_decompression_bomb():
+    bomb = _png_header(width=500, height=500)  # 250_000 > 2 * 100
+    with pytest.raises(ImageError, match="max_image_pixels"):
+        open_image(bomb, label="image 1", max_bytes=1024 * 1024, max_pixels=100)
 
 
 def test_oversize_data_url():

@@ -57,7 +57,11 @@ def open_image(raw: bytes, *, label: str, max_bytes: int, max_pixels: int) -> Im
         Image.MAX_IMAGE_PIXELS = max_pixels
         try:
             with Image.open(BytesIO(raw)) as image:
+                # Pillow errors only above twice MAX_IMAGE_PIXELS. Between the cap and
+                # that point it warns and still decodes, so check the header first.
+                _reject_if_too_many_pixels(image, label=label, max_pixels=max_pixels)
                 image.load()
+                _reject_if_too_many_pixels(image, label=label, max_pixels=max_pixels)
                 return image.copy()
         except Image.DecompressionBombError as exc:
             raise ImageError(f"{label} exceeds max_image_pixels ({max_pixels})") from exc
@@ -65,6 +69,12 @@ def open_image(raw: bytes, *, label: str, max_bytes: int, max_pixels: int) -> Im
             raise ImageError(f"{label} is not a readable image") from exc
         finally:
             Image.MAX_IMAGE_PIXELS = previous
+
+
+def _reject_if_too_many_pixels(image: Image.Image, *, label: str, max_pixels: int) -> None:
+    width, height = image.size
+    if width > 0 and height > 0 and width * height > max_pixels:
+        raise ImageError(f"{label} exceeds max_image_pixels ({max_pixels})")
 
 
 def _decode_spec(
