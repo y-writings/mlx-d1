@@ -28,6 +28,7 @@ _SCALAR_KEYS = (
     "max_image_pixels",
     "max_batch",
     "allowed_image_dirs",
+    "allow_download",
 )
 _INT_ENV = {
     "MLX_D1_PORT": "port",
@@ -63,6 +64,7 @@ class Settings:
     max_image_pixels: int = 40_000_000
     max_batch: int = 32
     presets: dict[str, Preset] = field(default_factory=dict)
+    allow_download: bool = False
 
 
 def load_settings(
@@ -116,6 +118,7 @@ def _defaults() -> dict[str, Any]:
         "max_image_pixels": 40_000_000,
         "max_batch": 32,
         "presets": {},
+        "allow_download": False,
     }
 
 
@@ -162,6 +165,10 @@ def _apply_env(values: dict[str, Any], environ: Mapping[str, str]) -> None:
             values["set_size"] = None
         else:
             values["set_size"] = _parse_int_env("MLX_D1_SET_SIZE", raw)
+    if "MLX_D1_ALLOW_DOWNLOAD" in environ:
+        values["allow_download"] = _parse_bool(
+            "MLX_D1_ALLOW_DOWNLOAD", environ["MLX_D1_ALLOW_DOWNLOAD"]
+        )
     if "MLX_D1_ALLOWED_IMAGE_DIRS" in environ:
         raw = environ["MLX_D1_ALLOWED_IMAGE_DIRS"]
         if raw.strip() == "":
@@ -197,6 +204,19 @@ def _parse_presets(raw: Any) -> dict[str, Preset]:
             raise ConfigError(f"preset {name}: {exc}") from exc
         presets[name] = Preset(name=name, description=description.strip(), questions=questions)
     return presets
+
+
+def _parse_bool(name: str, raw: Any) -> bool:
+    if isinstance(raw, bool):
+        return raw
+    if not isinstance(raw, str):
+        raise ConfigError(f"{name} must be true or false")
+    value = raw.strip().lower()
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if value in {"0", "false", "no", "off"}:
+        return False
+    raise ConfigError(f"{name} must be true or false")
 
 
 def _parse_int_env(name: str, raw: str) -> int:
@@ -249,6 +269,7 @@ def _finalize(values: dict[str, Any]) -> Settings:
     presets = values["presets"]
     if not isinstance(presets, dict):
         raise ConfigError("presets must be a table")
+    allow_download = _parse_bool("allow_download", values["allow_download"])
     return Settings(
         model=model.strip(),
         host=host.strip(),
@@ -264,4 +285,5 @@ def _finalize(values: dict[str, Any]) -> Settings:
         max_image_pixels=values["max_image_pixels"],
         max_batch=values["max_batch"],
         presets=presets,
+        allow_download=allow_download,
     )

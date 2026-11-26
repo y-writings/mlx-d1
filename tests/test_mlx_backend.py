@@ -1,11 +1,14 @@
+import os
 import sys
 import threading
 import time
 import types
+from pathlib import Path
 
 import pytest
 
 from mlx_d1.backends.mlx import MlxVlmBackend
+from mlx_d1.errors import ModelNotAvailable
 
 
 class _Missing:
@@ -59,8 +62,36 @@ def loaded_model(monkeypatch):
     return model
 
 
-def test_mlx_backend_calls_system_one_and_batches_media(loaded_model):
-    backend = MlxVlmBackend("LiquidAI/d1-2B-MLX-8bit")
+def _checkpoint(path: Path) -> Path:
+    path.mkdir()
+    (path / "config.json").write_text("{}", encoding="utf-8")
+    (path / "weights.safetensors").write_bytes(b"weights")
+    return path
+
+
+def test_mlx_backend_loads_only_a_local_directory(loaded_model, tmp_path: Path):
+    folder = _checkpoint(tmp_path / "d1")
+    seen: dict[str, str | None] = {}
+    original = sys.modules["mlx_vlm"].load
+
+    def load(model_id: str):
+        seen["path"] = model_id
+        seen["offline"] = os.environ.get("HF_HUB_OFFLINE")
+        return original(model_id)
+
+    sys.modules["mlx_vlm"].load = load
+    backend = MlxVlmBackend("LiquidAI/d1-2B-MLX-8bit", weights_path=folder)
+    assert seen["path"] == str(folder.resolve())
+    assert seen["offline"] == "1"
+    assert os.environ.get("HF_HUB_OFFLINE") != "1"
+    assert backend.model_id == "LiquidAI/d1-2B-MLX-8bit"
+    with pytest.raises(ModelNotAvailable):
+        MlxVlmBackend("LiquidAI/d1-2B-MLX-8bit", weights_path=tmp_path / "missing")
+    assert loaded_model.one_calls == []
+
+
+def test_mlx_backend_calls_system_one_and_batches_media(loaded_model, tmp_path: Path):
+    backend = MlxVlmBackend("LiquidAI/d1-2B-MLX-8bit", weights_path=_checkpoint(tmp_path / "d1"))
     image = object()
     backend.system_one(
         "ticket", {"refund": {"type": "noul"}}, None, score_readout="mean", set_size=4
@@ -86,8 +117,27 @@ def test_mlx_backend_calls_system_one_and_batches_media(loaded_model):
     backend.close()
 
 
-def test_mlx_backend_lock_is_serial(loaded_model):
-    backend = MlxVlmBackend("LiquidAI/d1-2B-MLX-8bit")
+def test_load_backend_uses_a_prepared_directory_without_prompt(
+    loaded_model, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    from mlx_d1.config import Settings
+    from mlx_d1.factory import load_backend
+
+    folder = _checkpoint(tmp_path / "ready")
+
+    def refuse(*_args, **_kwargs):
+        raise AssertionError("prepare_weights should not run when a directory is already chosen")
+
+    monkeypatch.setattr("mlx_d1.weights.prepare_weights", refuse)
+    backend = load_backend(
+        Settings(backend="mlx", model="LiquidAI/d1-2B-MLX-8bit"),
+        weights_path=folder,
+    )
+    assert backend.weights_path == folder.resolve()
+
+
+def test_mlx_backend_lock_is_serial(loaded_model, tmp_path: Path):
+    backend = MlxVlmBackend("LiquidAI/d1-2B-MLX-8bit", weights_path=_checkpoint(tmp_path / "d1"))
     threads = [
         threading.Thread(target=lambda: backend.system_one("s", {"q": {}}, None)) for _ in range(4)
     ]

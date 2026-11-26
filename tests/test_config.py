@@ -88,6 +88,18 @@ instructions = "Yes?"
         load_settings(config_path=config, environ={})
 
 
+def test_allow_download_is_off_unless_opted_in(tmp_path: Path):
+    config = tmp_path / "mlx-d1.toml"
+    config.write_text("allow_download = true\n", encoding="utf-8")
+    assert load_settings(config_path=config, environ={}).allow_download is True
+    assert (
+        load_settings(config_path=config, environ={"MLX_D1_ALLOW_DOWNLOAD": "0"}).allow_download
+        is False
+    )
+    assert load_settings(environ={}, overrides={"allow_download": True}).allow_download is True
+    assert load_settings(environ={}).allow_download is False
+
+
 def test_resolve_config_path_finds_local_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.chdir(tmp_path)
     assert resolve_config_path(None, environ={}) is None

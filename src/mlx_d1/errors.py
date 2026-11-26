@@ -20,3 +20,7 @@ class ImageError(ValueError):
 
 class ConfigError(ValueError):
     """The config file or environment could not be loaded."""
+
+
+class ModelNotAvailable(Exception):
+    """Weights are not on disk, and this process will not download them."""

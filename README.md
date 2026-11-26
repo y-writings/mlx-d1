@@ -44,9 +44,9 @@ source .venv/bin/activate
 pip install -e ".[mlx]"
 ```
 
-`mlx-vlm` must be at least 0.7.11. The first request after startup does not
-download the model: startup does. The 8-bit weights are about 2.22 GB.
-Hugging Face caches them under your home directory.
+`mlx-vlm` must be at least 0.7.11. The 8-bit weights are about 2.22 GB.
+Startup loads them only from a local directory or from a complete copy already
+in the Hugging Face cache. It does not start a download on its own.
 
 ```bash
 cp examples/config.toml mlx-d1.toml
@@ -71,6 +71,7 @@ variables, then flags.
 | Score readout             | `--score-readout`          | `MLX_D1_SCORE_READOUT`      |
 | Allowed image directories | `--allow-dir` (repeatable) | `MLX_D1_ALLOWED_IMAGE_DIRS` |
 | Config file path          | `--config`                 | `MLX_D1_CONFIG`             |
+| Download without asking   | `--allow-download`         | `MLX_D1_ALLOW_DOWNLOAD`     |
 
 `MLX_D1_ALLOWED_IMAGE_DIRS` is split on the platform path separator (`:` on
 macOS). `MLX_D1_SET_SIZE` sets the d1 `set_size` (empty, `none`, or `null`
@@ -79,6 +80,62 @@ when you do not pass `--config`.
 
 `GET /health` returns `model_loaded: true` only after the MLX weights are
 resident. `backend` is `mlx` or `fake`.
+
+## Where the weights come from
+
+`mlx-d1 serve` is the command that loads the model. `mlx-d1 bench` and
+`mlx-d1 mcp` do not. They talk to a server that is already running.
+
+On startup the loader looks for the configured model:
+
+- A local directory that contains `config.json` and a `.safetensors` file is
+  loaded as-is. There is no prompt and no network download.
+- A Hugging Face repo id that is already complete in the local cache (the same
+  files `mlx-vlm` would use) is loaded the same way. The cache lookup asks the
+  Hub library for local files only.
+- Otherwise the program prints the repo id and a size when it can (the model
+  card's figure for `LiquidAI/d1-2B-MLX-8bit` is about 2.22 GB) and asks
+  `Download it now? [y/N]`. `y` or `yes` downloads, then loads. Any other
+  answer, including Enter, does not download.
+
+A relative folder has to exist, or be written as `./folder`, so a missing path
+is not treated as a repo id.
+
+The answer has to come from a terminal. `launchd`, an MCP client, or any other
+start with no TTY never downloads. Opt in for those cases with one of:
+
+- `allow_download = true` in `mlx-d1.toml`
+- `MLX_D1_ALLOW_DOWNLOAD=1`
+- `mlx-d1 serve --allow-download`
+
+The same priority applies as for the model itself: the TOML file, then the
+environment variable, then the flag. A later source replaces an earlier one.
+
+If you decline, or there is no terminal, the process exits without fetching
+weights and prints a manual download, for example:
+
+```bash
+huggingface-cli download LiquidAI/d1-2B-MLX-8bit --local-dir ./d1-2B-MLX-8bit
+```
+
+Point mlx-d1 at that folder with one of these. Later sources replace earlier
+ones:
+
+1. `model` in `mlx-d1.toml`
+2. `MLX_D1_MODEL`
+3. `--model`
+
+```bash
+# mlx-d1.toml
+# model = "/absolute/path/to/d1-2B-MLX-8bit"
+
+MLX_D1_MODEL=/absolute/path/to/d1-2B-MLX-8bit mlx-d1 serve
+mlx-d1 serve --model /absolute/path/to/d1-2B-MLX-8bit
+```
+
+The loader then calls `mlx_vlm.load` with that directory only, and sets
+`HF_HUB_OFFLINE=1` for the call. A repo id is never passed to `load`, so a
+missing file cannot fall through into a download.
 
 Check it:
 
@@ -742,6 +799,9 @@ Automated tests, run here and in CI, use the fake backend and a stand-in for
 - presets loaded from `examples/config.toml`
 - a live process that keeps answering JSON
 - the MLX adapter's call into `system_one` / `system_one_batch` and its lock
+- local-only weight resolution: a directory or a cached repo does not
+  download, a declined or non-interactive start does not download, and
+  `load` is called with a local directory while `HF_HUB_OFFLINE=1`
 
 They do not load `LiquidAI/d1-2B-MLX-8bit` and they do not check answer
 quality.
@@ -749,6 +809,9 @@ quality.
 On the Mac, with the real weights, check:
 
 - `mlx-d1 serve` stays up and `model_loaded` is true
+- a model already on disk or in the Hugging Face cache starts with no prompt
+  and no download; a missing repo id asks first; a start with no terminal
+  does not download unless `allow_download` is set
 - a curl of each question type, plus compare, a preset, and a second request
   from another process
 - `mlx-d1 bench`, and the llama-server comparison if you want that record

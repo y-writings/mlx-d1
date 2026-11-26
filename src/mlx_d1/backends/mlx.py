@@ -9,24 +9,32 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import Any
+
+from mlx_d1.weights import offline_hub, require_checkpoint
 
 
 class MlxVlmBackend:
     name = "mlx"
 
-    def __init__(self, model_id: str) -> None:
+    def __init__(self, model_id: str, *, weights_path: Path) -> None:
         try:
             from mlx_vlm import load
         except ImportError as exc:
             raise RuntimeError(
                 'mlx-vlm is not installed. On Apple Silicon run: pip install "mlx-vlm>=0.7.11"'
             ) from exc
+        # ``load`` downloads a repo id. Only an existing checkpoint directory is passed,
+        # and the Hub is forced offline for the call so a missing file cannot be fetched.
+        local = require_checkpoint(Path(weights_path))
         self.model_id = model_id
+        self.weights_path = local
         self._infer_lock = threading.Lock()
         # ``load`` attaches the processor and calibration to the model. Keep
         # the processor referenced for the life of the model.
-        self._model, self._processor = load(model_id)
+        with offline_hub():
+            self._model, self._processor = load(str(local))
 
     def system_one(
         self,
