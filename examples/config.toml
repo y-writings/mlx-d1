@@ -1,0 +1,44 @@
+# Copy to mlx-d1.toml and edit. Environment variables override this file.
+# The server binds to localhost so it can sit next to LM Studio.
+
+model = "LiquidAI/d1-2B-MLX-8bit"
+host = "127.0.0.1"
+port = 8091
+backend = "mlx"
+score_readout = "median"
+
+# Absolute directories the server may read when a request passes a file path.
+# Leave this empty to accept only base64 and data URLs.
+allowed_image_dirs = []
+
+max_image_bytes = 33554432
+max_images = 8
+
+# Example preset. The questions are sample wording, not a built-in policy.
+# The server returns the model's answers and does not apply a cutoff.
+[presets.image_artifacts]
+description = "Example questions for one generated image. Edit or replace them."
+
+[presets.image_artifacts.questions.extra_limbs]
+type = "noul"
+instructions = """
+Does the picture show an extra, missing, or fused limb, finger, or joint that looks unintended?
+"""
+
+[presets.image_artifacts.questions.warped_text]
+type = "noul"
+instructions = "Does any text in the picture look misspelled, melted, or illegible?"
+
+[presets.image_artifacts.questions.warped_geometry]
+type = "noul"
+instructions = """
+Does the picture show melted objects or broken geometry that looks like a generation artifact?
+"""
+
+[presets.image_artifacts.questions.severity]
+type = "score"
+instructions = """
+How severe are unintended visual generation artifacts? \
+Ignore ordinary style, lighting, and exposure.
+"""
+criteria = ["none", "minor", "noticeable", "severe"]
