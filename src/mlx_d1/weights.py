@@ -73,7 +73,7 @@ def prepare_weights(
         raise ModelNotAvailable(_missing_path_message(spec))
 
     cached = locate(spec)
-    if cached is not None:
+    if cached is not None and is_complete_checkpoint(Path(cached)):
         return require_checkpoint(Path(cached))
 
     if allow_download:
@@ -138,15 +138,43 @@ def offline_hub():
 
 
 class _OfflineHub:
+    """Block Hub HTTP calls, including clients already imported.
+
+    ``huggingface_hub`` copies ``HF_HUB_OFFLINE`` into ``constants`` at import
+    time, and the HTTP layer reads that value rather than the environment.
+    Setting the environment alone does not stop a later ``load`` from fetching.
+    """
+
     def __enter__(self) -> None:
-        self._previous = os.environ.get("HF_HUB_OFFLINE")
+        self._previous_env = os.environ.get("HF_HUB_OFFLINE")
         os.environ["HF_HUB_OFFLINE"] = "1"
+        self._previous_flags: list[tuple[Any, Any]] = []
+        for name, module in list(sys.modules.items()):
+            if module is None or not name.startswith("huggingface_hub"):
+                continue
+            values = getattr(module, "__dict__", None)
+            if not values or "HF_HUB_OFFLINE" not in values:
+                continue
+            self._previous_flags.append((module, values["HF_HUB_OFFLINE"]))
+            module.HF_HUB_OFFLINE = True
 
     def __exit__(self, *_exc: object) -> None:
-        if self._previous is None:
+        for module, previous in reversed(self._previous_flags):
+            module.HF_HUB_OFFLINE = previous
+        if self._previous_env is None:
             os.environ.pop("HF_HUB_OFFLINE", None)
         else:
-            os.environ["HF_HUB_OFFLINE"] = self._previous
+            os.environ["HF_HUB_OFFLINE"] = self._previous_env
+        # A first import during the context bakes the flag in as True. Reset
+        # any copy we did not capture so it matches the restored environment.
+        restored = {id(module) for module, _previous in self._previous_flags}
+        offline = _env_is_offline()
+        for name, module in list(sys.modules.items()):
+            if module is None or not name.startswith("huggingface_hub") or id(module) in restored:
+                continue
+            values = getattr(module, "__dict__", None)
+            if values and "HF_HUB_OFFLINE" in values:
+                module.HF_HUB_OFFLINE = offline
 
 
 def _existing_directory(spec: str) -> Path | None:
@@ -160,11 +188,19 @@ def _is_repo_id(spec: str) -> bool:
     return _REPO_ID.fullmatch(spec) is not None and not Path(spec).exists()
 
 
+def is_complete_checkpoint(path: Path) -> bool:
+    """True when the directory has the files ``mlx_vlm.load`` needs."""
+    resolved = path.expanduser()
+    return (
+        resolved.is_dir()
+        and (resolved / "config.json").is_file()
+        and any(resolved.glob("*.safetensors"))
+    )
+
+
 def require_checkpoint(path: Path) -> Path:
     resolved = path.expanduser().resolve()
-    if not resolved.is_dir():
-        raise ModelNotAvailable(f"{resolved} is not a directory of model files.")
-    if not (resolved / "config.json").is_file() or not any(resolved.glob("*.safetensors")):
+    if not is_complete_checkpoint(resolved):
         raise ModelNotAvailable(
             f"{resolved} is not a complete MLX checkpoint. "
             "It needs config.json and at least one .safetensors file."
@@ -224,6 +260,13 @@ def _format_bytes(num_bytes: int) -> str:
     if gib >= 0.1:
         return f"about {gib:.2f} GB"
     return f"about {num_bytes / (1024**2):.0f} MB"
+
+
+def _env_is_offline() -> bool:
+    raw = os.environ.get("HF_HUB_OFFLINE") or os.environ.get("TRANSFORMERS_OFFLINE")
+    if raw is None:
+        return False
+    return raw.upper() in {"1", "ON", "YES", "TRUE"}
 
 
 def _echo(message: str) -> None:

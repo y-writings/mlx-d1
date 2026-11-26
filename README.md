@@ -90,9 +90,11 @@ On startup the loader looks for the configured model:
 
 - A local directory that contains `config.json` and a `.safetensors` file is
   loaded as-is. There is no prompt and no network download.
-- A Hugging Face repo id that is already complete in the local cache (the same
-  files `mlx-vlm` would use) is loaded the same way. The cache lookup asks the
-  Hub library for local files only.
+- A Hugging Face repo id that is already a complete checkpoint in the local
+  cache (the same files `mlx-vlm` would use) is loaded the same way. The cache
+  lookup asks the Hub library for local files only. A partial cache, such as a
+  download that stopped early, is treated as missing so you can confirm a
+  download or pass `--allow-download` to finish it.
 - Otherwise the program prints the repo id and a size when it can (the model
   card's figure for `LiquidAI/d1-2B-MLX-8bit` is about 2.22 GB) and asks
   `Download it now? [y/N]`. `y` or `yes` downloads, then loads. Any other
@@ -133,9 +135,10 @@ MLX_D1_MODEL=/absolute/path/to/d1-2B-MLX-8bit mlx-d1 serve
 mlx-d1 serve --model /absolute/path/to/d1-2B-MLX-8bit
 ```
 
-The loader then calls `mlx_vlm.load` with that directory only, and sets
-`HF_HUB_OFFLINE=1` for the call. A repo id is never passed to `load`, so a
-missing file cannot fall through into a download.
+The loader then calls `mlx_vlm.load` with that directory only. For the call it
+also turns on the Hub client's offline flag, including the copy
+`huggingface_hub` captured when it was imported, so a later file lookup cannot
+reach the network. A repo id is never passed to `load`.
 
 Check it:
 

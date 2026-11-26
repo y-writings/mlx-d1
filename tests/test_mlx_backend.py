@@ -75,14 +75,29 @@ def test_mlx_backend_loads_only_a_local_directory(loaded_model, tmp_path: Path):
     original = sys.modules["mlx_vlm"].load
 
     def load(model_id: str):
+        import httpx
+        import huggingface_hub.constants as constants
+        from huggingface_hub.errors import OfflineModeIsEnabled
+        from huggingface_hub.utils._http import hf_request_event_hook
+
         seen["path"] = model_id
         seen["offline"] = os.environ.get("HF_HUB_OFFLINE")
+        seen["flag"] = str(constants.HF_HUB_OFFLINE)
+        request = httpx.Request("GET", "https://huggingface.co/LiquidAI/d1-2B-MLX-8bit")
+        try:
+            hf_request_event_hook(request)
+        except OfflineModeIsEnabled:
+            seen["blocked"] = "yes"
+        else:
+            seen["blocked"] = "no"
         return original(model_id)
 
     sys.modules["mlx_vlm"].load = load
     backend = MlxVlmBackend("LiquidAI/d1-2B-MLX-8bit", weights_path=folder)
     assert seen["path"] == str(folder.resolve())
     assert seen["offline"] == "1"
+    assert seen["flag"] == "True"
+    assert seen["blocked"] == "yes"
     assert os.environ.get("HF_HUB_OFFLINE") != "1"
     assert backend.model_id == "LiquidAI/d1-2B-MLX-8bit"
     with pytest.raises(ModelNotAvailable):

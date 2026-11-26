@@ -134,6 +134,61 @@ def test_no_tty_never_downloads_unless_allowed(tmp_path: Path):
     assert found == downloaded.resolve()
 
 
+def test_incomplete_cache_can_still_be_downloaded(tmp_path: Path):
+    partial = tmp_path / "partial"
+    partial.mkdir()
+    (partial / "config.json").write_text("{}", encoding="utf-8")
+    downloaded = _checkpoint(tmp_path / "full")
+    fetched = {"n": 0}
+
+    def fetch(_repo: str) -> Path:
+        fetched["n"] += 1
+        return downloaded
+
+    found = prepare_weights(
+        "LiquidAI/d1-2B-MLX-8bit",
+        allow_download=True,
+        interactive=False,
+        input_fn=lambda: (_ for _ in ()).throw(AssertionError("prompt")),
+        locate=lambda _repo: partial,
+        fetch=fetch,
+        describe_size=lambda _repo: None,
+        echo=lambda _message: None,
+    )
+    assert found == downloaded.resolve()
+    assert fetched["n"] == 1
+
+    with pytest.raises(ModelNotAvailable, match="No terminal is attached"):
+        prepare_weights(
+            "LiquidAI/d1-2B-MLX-8bit",
+            allow_download=False,
+            interactive=False,
+            locate=lambda _repo: partial,
+            fetch=lambda _repo: (_ for _ in ()).throw(AssertionError("download")),
+            describe_size=lambda _repo: None,
+            echo=lambda _message: None,
+        )
+
+
+def test_offline_hub_blocks_a_client_imported_earlier():
+    import httpx
+    import huggingface_hub.constants as constants
+    from huggingface_hub.errors import OfflineModeIsEnabled
+    from huggingface_hub.utils._http import hf_request_event_hook
+
+    from mlx_d1.weights import offline_hub
+
+    constants.HF_HUB_OFFLINE = False
+    request = httpx.Request("GET", "https://huggingface.co/api/models/LiquidAI/d1-2B-MLX-8bit")
+    hf_request_event_hook(request)
+    with offline_hub():
+        assert constants.is_offline_mode() is True
+        with pytest.raises(OfflineModeIsEnabled):
+            hf_request_event_hook(request)
+    assert constants.HF_HUB_OFFLINE is False
+    hf_request_event_hook(request)
+
+
 def test_missing_path_is_not_treated_as_a_repo(tmp_path: Path):
     missing = tmp_path / "missing-model"
     with pytest.raises(ModelNotAvailable, match="does not exist"):
