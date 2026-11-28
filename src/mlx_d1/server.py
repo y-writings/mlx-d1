@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import Body, FastAPI, Request
@@ -21,7 +22,12 @@ from mlx_d1.service import InferenceGate, JudgeService
 log = logging.getLogger("mlx_d1")
 
 
-def create_app(settings: Settings, backend: Any | None = None) -> FastAPI:
+def create_app(
+    settings: Settings,
+    backend: Any | None = None,
+    *,
+    weights_path: Path | None = None,
+) -> FastAPI:
     """Build the app. Pass ``backend`` to skip loading weights (tests, fake mode)."""
 
     @asynccontextmanager
@@ -29,7 +35,9 @@ def create_app(settings: Settings, backend: Any | None = None) -> FastAPI:
         active = getattr(app.state, "backend", None)
         if active is None:
             log.info("loading decision model %s", app.state.settings.model)
-            active = load_backend(app.state.settings)
+            active = load_backend(
+                app.state.settings, weights_path=getattr(app.state, "weights_path", None)
+            )
             app.state.backend = active
             log.info("decision model ready backend=%s", getattr(active, "name", "unknown"))
         app.state.service = JudgeService(app.state.settings, active, InferenceGate())
@@ -51,6 +59,7 @@ def create_app(settings: Settings, backend: Any | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.settings = settings
+    app.state.weights_path = weights_path
     if backend is not None:
         app.state.backend = backend
 

@@ -12,7 +12,7 @@ from typing import Any
 
 from mlx_d1.bench import DEFAULT_PAYLOAD, bench_url, format_report
 from mlx_d1.config import load_settings, resolve_config_path
-from mlx_d1.errors import ConfigError
+from mlx_d1.errors import ConfigError, ModelNotAvailable
 from mlx_d1.server import create_app
 
 
@@ -24,6 +24,9 @@ def main(argv: list[str] | None = None) -> None:
     except ConfigError as exc:
         print(f"error: {exc}", file=sys.stderr)
         raise SystemExit(2) from exc
+    except ModelNotAvailable as exc:
+        print(str(exc), file=sys.stderr)
+        raise SystemExit(1) from exc
     except BrokenPipeError:
         raise SystemExit(0) from None
     raise SystemExit(code)
@@ -46,6 +49,11 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--score-readout", choices=("median", "mean", "argmax"))
     serve.add_argument(
         "--allow-dir", action="append", help="Allow image paths under this directory (repeatable)"
+    )
+    serve.add_argument(
+        "--allow-download",
+        action="store_true",
+        help="Download a missing model without asking (launchd and other non-interactive starts)",
     )
     serve.set_defaults(func=cmd_serve)
 
@@ -81,6 +89,15 @@ def cmd_serve(args: argparse.Namespace) -> int:
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
     log = logging.getLogger("mlx_d1")
+    weights_path = None
+    if settings.backend == "mlx":
+        from mlx_d1.weights import prepare_weights
+
+        try:
+            weights_path = prepare_weights(settings.model, allow_download=settings.allow_download)
+        except ModelNotAvailable as exc:
+            print(str(exc), file=sys.stderr)
+            return 1
     log.info(
         "serving http://%s:%s backend=%s model=%s",
         settings.host,
@@ -90,7 +107,12 @@ def cmd_serve(args: argparse.Namespace) -> int:
     )
     import uvicorn
 
-    uvicorn.run(create_app(settings), host=settings.host, port=settings.port, log_level="info")
+    uvicorn.run(
+        create_app(settings, weights_path=weights_path),
+        host=settings.host,
+        port=settings.port,
+        log_level="info",
+    )
     return 0
 
 
@@ -164,4 +186,6 @@ def _serve_overrides(args: argparse.Namespace) -> dict[str, Any]:
         overrides["score_readout"] = args.score_readout
     if args.allow_dir is not None:
         overrides["allowed_image_dirs"] = args.allow_dir
+    if getattr(args, "allow_download", False):
+        overrides["allow_download"] = True
     return overrides

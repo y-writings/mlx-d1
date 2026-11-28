@@ -12,6 +12,7 @@ license = "MIT"
 authors = [{ name = "Yoshiro M" }]
 dependencies = [
   "fastapi>=0.115",
+  "huggingface_hub>=0.26",
   "httpx>=0.27",
   "mcp>=2",
   "pillow>=10",

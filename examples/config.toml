@@ -7,6 +7,9 @@ port = 8091
 backend = "mlx"
 score_readout = "median"
 
+# A missing model is not downloaded unless you opt in.
+# allow_download = false
+
 # Absolute directories the server may read when a request passes a file path.
 # Leave this empty to accept only base64 and data URLs.
 allowed_image_dirs = []
