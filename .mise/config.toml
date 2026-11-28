@@ -1,10 +1,20 @@
 # This TOML file contains project-specific settings.
 # Add project-specific information here.
 
+[tools]
+uv = "0.13.10"
+
+[tasks.lint]
+description = "Run ruff lint and format checks"
+run = [
+  "uv run ruff check src tests",
+  "uv run ruff format --check src tests",
+]
+
 [tasks.test]
 description = "Run the decision-server tests"
-run = "python -m pytest"
+run = "uv run pytest"
 
 [tasks.serve]
 description = "Serve decisions with the config file in the working directory"
-run = "python -m mlx_d1 serve"
+run = "uv run --extra mlx mlx-d1 serve"

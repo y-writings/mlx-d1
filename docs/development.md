@@ -3,14 +3,12 @@
 On any platform, including this repository's Linux CI image:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
-pytest
+uv sync
+uv run pytest
 ```
 
-`mlx-d1 serve --backend fake` answers without weights so you can exercise the
-HTTP surface. Fake answers are placeholders.
+`uv run mlx-d1 serve --backend fake` answers without weights so you can
+exercise the HTTP surface. Fake answers are placeholders.
 
 To add a backend, implement `system_one` and `system_one_batch` on the
 protocol in `mlx_d1.backends.base` and construct it in `mlx_d1.factory`. Media
@@ -41,14 +39,15 @@ quality.
 
 On the Mac, with the real weights, check:
 
-- `mlx-d1 serve` stays up and `model_loaded` is true
+- `uv run --extra mlx mlx-d1 serve` stays up and `model_loaded` is true
 - a model already on disk or in the Hugging Face cache starts with no prompt
   and no download; a missing repo id asks first; a start with no terminal
   does not download unless `allow_download` is set
 - a curl of each question type, plus compare, a preset, and a second request
   from another process
-- `mlx-d1 bench`, and the llama-server comparison if you want that record
-- `mlx-d1 mcp` from pi
+- `uv run --no-sync mlx-d1 bench`, and the llama-server comparison if you want
+  that record
+- `uv run --no-sync mlx-d1 mcp` from pi
 - your own review of real A/B pairs and any cutoff you want to apply
 
 Reviewing 20 to 50 generated pairs for bias, including whether brighter images

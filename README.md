@@ -15,7 +15,8 @@ the [HTTP API](docs/http-api.md).
 
 ## Requirements
 
-- Python 3.11 or newer.
+- [uv](https://docs.astral.sh/uv/) (or run `mise install` to install the pinned
+  version). `uv` manages Python 3.12 automatically from `.python-version`.
 - Apple Silicon and `mlx-vlm` 0.7.11 or newer to load the real model. The
   8-bit weights are about 2.22 GB.
 - The default model is `LiquidAI/d1-2B-MLX-8bit`. Startup loads a local
@@ -28,11 +29,9 @@ MLX does not run on this repository's Linux CI image.
 ## Quickstart
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[mlx]"
+uv sync --extra mlx
 cp examples/config.toml mlx-d1.toml
-mlx-d1 serve --config mlx-d1.toml
+uv run --extra mlx mlx-d1 serve --config mlx-d1.toml
 ```
 
 The server listens on `127.0.0.1:8091`. There is no authentication.
