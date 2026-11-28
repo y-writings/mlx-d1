@@ -3,14 +3,12 @@
 On any platform, including this repository's Linux CI image:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
-pytest
+uv sync
+uv run pytest
 ```
 
-`mlx-d1 serve --backend fake` answers without weights so you can exercise the
-HTTP surface. Fake answers are placeholders.
+`uv run mlx-d1 serve --backend fake` answers without weights so you can
+exercise the HTTP surface. Fake answers are placeholders.
 
 To add a backend, implement `system_one` and `system_one_batch` on the
 protocol in `mlx_d1.backends.base` and construct it in `mlx_d1.factory`. Media
