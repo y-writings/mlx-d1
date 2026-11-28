@@ -4,7 +4,7 @@ Start the HTTP server first. In another terminal, the MCP process only
 forwards tool calls:
 
 ```bash
-mlx-d1 mcp
+uv run --no-sync mlx-d1 mcp
 ```
 
 `MLX_D1_URL` defaults to `http://127.0.0.1:8091`.
@@ -29,18 +29,25 @@ pi-mcp-adapter reads `.mcp.json` (project) or `~/.config/mcp/mcp.json`. Pi
 {
   "mcpServers": {
     "mlx-d1": {
-      "command": "mlx-d1",
-      "args": ["mcp"],
+      "command": "uv",
+      "args": [
+        "run",
+        "--no-sync",
+        "--project",
+        "/path/to/mlx-d1",
+        "mlx-d1",
+        "mcp"
+      ],
       "env": { "MLX_D1_URL": "http://127.0.0.1:8091" }
     }
   }
 }
 ```
 
-Or, from a project directory, with the virtualenv's executable on `PATH`:
+Or, from any project directory, pointing `uv` at your `mlx-d1` checkout:
 
 ```bash
-pi mcp add -l mlx-d1 -- mlx-d1 mcp
+pi mcp add -l mlx-d1 -- uv run --no-sync --project /path/to/mlx-d1 mlx-d1 mcp
 ```
 
 Image paths in tool arguments still have to sit under the HTTP server's

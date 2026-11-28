@@ -8,7 +8,7 @@ talk to a server that is already running.
 
 ```bash
 cp examples/config.toml mlx-d1.toml
-mlx-d1 serve --config mlx-d1.toml
+uv run --extra mlx mlx-d1 serve --config mlx-d1.toml
 ```
 
 A `mlx-d1.toml` in the working directory is used when you do not pass
@@ -59,7 +59,7 @@ start with no TTY never downloads. Opt in for those cases with one of:
 
 - `allow_download = true` in `mlx-d1.toml`
 - `MLX_D1_ALLOW_DOWNLOAD=1`
-- `mlx-d1 serve --allow-download`
+- `uv run --extra mlx mlx-d1 serve --allow-download`
 
 That opt-in uses the same priority as the model path: the TOML file, then the
 environment variable, then the flag.
@@ -82,8 +82,8 @@ ones:
 # mlx-d1.toml
 # model = "/absolute/path/to/d1-2B-MLX-8bit"
 
-MLX_D1_MODEL=/absolute/path/to/d1-2B-MLX-8bit mlx-d1 serve
-mlx-d1 serve --model /absolute/path/to/d1-2B-MLX-8bit
+MLX_D1_MODEL=/absolute/path/to/d1-2B-MLX-8bit uv run --extra mlx mlx-d1 serve
+uv run --extra mlx mlx-d1 serve --model /absolute/path/to/d1-2B-MLX-8bit
 ```
 
 The loader then calls `mlx_vlm.load` with that directory only. For the call it

@@ -8,8 +8,8 @@ For a repeatable record, point `bench` at a running server. Warmup calls are
 excluded. `mlx-d1 bench` does not load or download weights.
 
 ```bash
-mlx-d1 bench --requests 20 --warmup 3
-mlx-d1 bench --requests 20 --warmup 3 --payload request.json --json
+uv run --no-sync mlx-d1 bench --requests 20 --warmup 3
+uv run --no-sync mlx-d1 bench --requests 20 --warmup 3 --payload request.json --json
 ```
 
 Compare the same body with llama-server. The default body is one `noul`
@@ -18,7 +18,7 @@ in llama.cpp yet, so a payload that uses them will fail on that side.
 
 ```bash
 llama-server -hf LiquidAI/d1-2B-GGUF:Q8_0 -b 8192 -ub 8192
-mlx-d1 bench --requests 20 --warmup 3 --llama-url http://127.0.0.1:8080
+uv run --no-sync mlx-d1 bench --requests 20 --warmup 3 --llama-url http://127.0.0.1:8080
 ```
 
 The report prints count, mean, p50, p95, min, and max in milliseconds, using
