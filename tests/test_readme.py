@@ -12,10 +12,15 @@ QUESTION_TYPES = {"noul", "choice", "score", "text", "number", "date", "box", "b
 
 
 def _json_blocks() -> list[object]:
-    text = (ROOT / "README.md").read_text(encoding="utf-8")
-    return [
-        json.loads(match.group(1)) for match in re.finditer(r"```json\n(.*?)```", text, re.DOTALL)
-    ]
+    pages = [ROOT / "README.md", *sorted((ROOT / "docs").glob("*.md"))]
+    blocks: list[object] = []
+    for page in pages:
+        text = page.read_text(encoding="utf-8")
+        blocks.extend(
+            json.loads(match.group(1))
+            for match in re.finditer(r"```json\n(.*?)```", text, re.DOTALL)
+        )
+    return blocks
 
 
 def test_readme_examples_cover_every_question_type_and_are_accepted():
